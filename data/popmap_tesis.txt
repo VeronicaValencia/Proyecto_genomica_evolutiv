@@ -1,0 +1,72 @@
+id	Poblacion
+AACV Rose 13-16	Cultivado_2x
+AACV Rose S3728	Cultivado_2x
+Balbisiana-like_10-071	Silvestre_2x
+Balbisiana_16-003	Silvestre_2x
+Balbisiana_16-010	Silvestre_2x
+Balbisiana_16-013	Silvestre_2x
+Balbisiana_16-018	Silvestre_2x
+Balbisiana_16-022	Silvestre_2x
+Butuhan_16-052	Silvestre_2x
+Butuhan_97-276	Silvestre_2x
+Butuhan_98-021	Silvestre_2x
+Butuhan_98-038	Silvestre_2x
+Butuhan_98-039	Silvestre_2x
+Butuhan_98-046	Silvestre_2x
+Butuhan_98-078	Silvestre_2x
+Butuhan_98-087	Silvestre_2x
+Butuhan_98-090	Silvestre_2x
+Butuhan_98-132	Silvestre_2x
+Butuhan_98-365	Silvestre_2x
+Butuhan_98-369	Silvestre_2x
+Butuhan_98-371	Silvestre_2x
+Butuhan_98-381	Silvestre_2x
+Butuhan_99-057	Silvestre_2x
+CAVENDISH	Cultivado_3x
+Cadisnon/Cardaba_10-072	Cultivado_3x
+Cardaba_09-011	Cultivado_3x
+Cardaba_09-015	Cultivado_3x
+Cardaba_09-034	Cultivado_3x
+Cardaba_09-043	Cultivado_3x
+Cardaba_GB71371	Cultivado_3x
+Giant Cardaba	Cultivado_3x
+Giant_Cardaba_09-044	Cultivado_3x
+Gros Michel_06-051	Cultivado_3x
+Inarnibal_06-017	Cultivado_2x
+K. Namwa Khom	Cultivado_3x
+K. Namwa Luang	Cultivado_3x
+Lakatan Cavite_04-007	Cultivado_3x
+Lakatan Davao	Cultivado_3x
+Lakatan Palawan	Cultivado_3x
+Latundan Davao	Cultivado_3x
+Ornata_16-017	Silvestre_2x
+Ornata_98-156	Silvestre_2x
+Pacol	Silvestre_2x
+Pacol_98-556	Silvestre_2x
+Pacol_98-572	Silvestre_2x
+Pacol_98-617	Silvestre_2x
+Pacol_98-626	Silvestre_2x
+Pacol_98-630	Silvestre_2x
+Saba Pula_12-005	Cultivado_3x
+Saba Puti	Cultivado_3x
+Saba Puti_10-067	Cultivado_3x
+Saba/Dippig_09-042	Cultivado_3x
+Saba/Dippig_09-055	Cultivado_3x
+Saba_10-001	Cultivado_3x
+Saba_10-006	Cultivado_3x
+Saba_10-010	Cultivado_3x
+Saba_10-049	Cultivado_3x
+Saba_10-050	Cultivado_3x
+Saba_10-051	Cultivado_3x
+Saba_10-052	Cultivado_3x
+Sabang Barako_10-040	Cultivado_3x
+Sabang Binong_10-039	Cultivado_3x
+Sabang Pilos_10-043	Cultivado_3x
+Sabang Pulpol_10-042	Cultivado_3x
+Sabang Puti_12-002	Cultivado_3x
+Sabang Puti_12-003	Cultivado_3x
+Sabang Puti_12-004	Cultivado_3x
+Senorita Tagaytay	Cultivado_2x
+Valery_06-050	Cultivado_3x
+Zebrina	Silvestre_2x
+Zebrina_16-014	Silvestre_2x
