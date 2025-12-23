@@ -64,7 +64,8 @@ El script principal ejecuta los siguientes pasos secuenciales:
 
 1.  **Clonar el repositorio:**
     ```bash
-    git clone [https://github.com/tu-usuario/tesis-banano.git](https://github.com/tu-usuario/tesis-banano.git)
+    git clone [https://https://github.com/VeronicaValencia/Proyecto_genomica_evolutiv.git]
+   
     ```
 
 2.  **Estructura de Carpetas:**
