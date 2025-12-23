@@ -63,10 +63,6 @@ El script principal ejecuta los siguientes pasos secuenciales:
 ## Instrucciones de Ejecución
 
 1.  **Clonar el repositorio:**
-    ```bash
-    git clone [https://https://github.com/VeronicaValencia/Proyecto_genomica_evolutiv.git]
-   
-    ```
 
 2.  **Estructura de Carpetas:**
     Asegúrate de que los archivos de datos estén en la carpeta correcta:
