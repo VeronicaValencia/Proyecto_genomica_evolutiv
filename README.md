@@ -1,49 +1,76 @@
-# Estudio genómico de Domesticación: Análisis Comparativo de Diversidad entre Tomate Silvestre y Cultivado
+# Estudio Genómico de Domesticación en Banano: Análisis de Diversidad, Estructura y Ploidía
 
 ## Descripción del Proyecto
-Este proyecto analiza los patrones de diversidad genética y estructura poblacional en accesiones de tomate (*Solanum lycopersicum*) y sus parientes silvestres. Utilizando SNPs, buscamos cuantificar el impacto del "cuello de botella" de la domesticación sobre la variabilidad genética del cultivo moderno.
 
-El repositorio contiene el flujo de trabajo bioinformático para el procesamiento de archivos VCF, cálculo de estadísticos de diversidad y visualización de estructura poblacional.
+Este proyecto analiza los patrones de diversidad genética, estructura poblacional y relaciones filogenéticas en accesiones de banano (*Musa* spp.). El estudio se centra en comparar ancestros silvestres diploides (*Silvestre_2x*) con cultivares diploides y triploides (*Cultivado_2x*, *Cultivado_3x*).
+
+Utilizando un dataset de SNPs, buscamos cuantificar el impacto del "cuello de botella" de la domesticación y el efecto de la poliploidía sobre la variabilidad genética. El repositorio contiene un flujo de trabajo bioinformático reproducible en R que abarca desde el control de calidad (QC) hasta el escaneo de genoma para la detección de genes bajo selección.
 
 ## Hipótesis
-Las poblaciones de tomate cultivado exhibirán una reducción significativa en la diversidad nucleotídica ($\pi$) y heterocigosidad esperada ($H_e$) en comparación con sus ancestros silvestres, debido a la selección artificial y deriva genética asociada a la domesticación. Asimismo, se espera una diferenciación genética clara ($F_{ST}$) entre ambos grupos.
+
+1.  **Estructura:** Las poblaciones de banano cultivado exhibirán una diferenciación genética clara ($F_{ST}$) respecto a sus ancestros silvestres.
+2.  **Modo Reproductivo:** Los grupos cultivados (especialmente los triploides) presentarán un exceso significativo de heterocigosidad ($H_o > H_e$, $F_{IS} < 0$) debido a la propagación clonal vegetativa prolongada, en contraste con los silvestres que mostrarán equilibrio o endogamia.
+3.  **Filogenia:** Los cultivares formarán clados monofiléticos derivados de un subconjunto de la diversidad silvestre.
 
 ## Objetivos
-1. **Estimar la diversidad genética:** Calcular y comparar la diversidad nucleotídica ($\pi$) y la heterocigosidad (observada vs. esperada) en grupos silvestres y cultivados.
-2. **Evaluar la estructura poblacional:** Visualizar la relación genética entre las accesiones mediante un Análisis de Componentes Principales (PCA).
-3. **Cuantificar la diferenciación:** Determinar el grado de diferenciación genética entre grupos mediante el índice de fijación ($F_{ST}$).
+
+1.  **Control de Calidad:** Implementar un filtrado robusto de muestras y variantes (SNPs) para asegurar la fiabilidad de los datos genómicos.
+2.  **Evaluar Estructura Poblacional:** Visualizar la relación genética y agrupamientos mediante Análisis de Componentes Principales (PCA).
+3.  **Reconstrucción Filogenética:** Inferir las relaciones evolutivas y el origen de los cultivares mediante árboles *Neighbor-Joining* enraizados.
+4.  **Estimar Diversidad y Modo Reproductivo:** Calcular Heterocigosidad ($H_o$ vs $H_e$) e Índice de Fijación ($F_{IS}$) para diagnosticar patrones de clonalidad vs. reproducción sexual.
+5.  **Detección de Selección:** Identificar *loci* candidatos a domesticación mediante un escaneo genómico de diferenciación ($G_{ST}$ outliers).
 
 ## Datos y Muestras
-El estudio utiliza un dataset de SNPs en formato VCF y metadatos asociados.
 
-* **Especies:** *Solanum lycopersicum* (Cultivado) y parientes silvestres.
-* **Número total de muestras:** 65 accesiones.
-    * **Grupo Cultivado:** 16 muestras (incluyendo accesiones HL, PCA, PPU).
-    * **Grupo Silvestre:** 49 muestras (incluyendo accesiones PAMA, PAN, PCO, PLI, POX, etc.).
-* **Formato de entrada:** Archivos `.vcf` (genotipos) y `.txt` (metadatos poblacionales).
+El estudio utiliza datos genómicos en formato VCF y metadatos asociados.
+
+* **Especie:** *Musa* spp. (Banano y Plátano).
+* **Archivos de entrada:**
+    * `data/dataset_tesis_banano.vcf.gz`: Genotipos (SNPs).
+    * `data/popmap_tesis.txt`: Metadatos poblacionales.
+* **Grupos de Estudio:**
+    * **Silvestre_2x:** Ancestros diploides (Referencia/Outgroup).
+    * **Cultivado_2x:** Cultivares diploides.
+    * **Cultivado_3x:** Cultivares triploides.
 
 ## Metodología y Herramientas
-El análisis se realiza íntegramente en el entorno **R**. El workflow actual abarca desde la carga de datos crudos hasta la estadística descriptiva poblacional.
+
+El análisis se realiza íntegramente en el entorno **R**. El flujo de trabajo está automatizado para garantizar la reproducibilidad.
 
 ### Librerías Principales
-* **vcfR:** Lectura y manipulación de archivos VCF.
-* **adegenet:** Análisis de datos genéticos (objetos `genind`/`genlight`) y PCA.
-* **pegas:** Cálculo de diversidad nucleotídica.
-* **hierfstat:** Estimación de estadísticos F (Weir & Cockerham).
-* **poppr:** Análisis de genética de poblaciones.
+
+* **vcfR:** Lectura, manipulación y control de calidad de archivos VCF.
+* **adegenet:** Análisis multivariado (PCA) y manejo de objetos genéticos (`genlight`/`genind`).
+* **hierfstat:** Estimación de estadísticos F de Wright ($F_{ST}$, $F_{IS}$) y diversidad básica.
+* **ggtree / ape:** Visualización avanzada y cálculo de árboles filogenéticos.
+* **tidyverse (ggplot2, dplyr):** Manipulación de datos y visualización gráfica de alto nivel.
+* **poppr:** Análisis de genética de poblaciones y clonlidad.
 
 ### Flujo de Trabajo (Workflow)
-El script principal (`scripts/Proyecto_final_gen_evol.R`) ejecuta los siguientes pasos:
 
-1.  **Pre-procesamiento:** Conversión de formato VCF a objetos `genind` y `genlight` de R. Limpieza de nombres de muestras para coincidencia con metadatos.
-2.  **Diversidad Nucleotídica ($\pi$):** Cálculo promedio por grupo poblacional.
-3.  **Heterocigosidad:** Comparación de $H_o$ vs $H_e$ para evaluar endogamia o selección.
-4.  **Análisis Multivariado:** Ejecución de PCA para visualizar agrupamientos genéticos.
-5.  **Diferenciación Genética:** Cálculo de $F_{ST}$ por pares (pairwise Weir & Cockerham).
+El script principal ejecuta los siguientes pasos secuenciales:
+
+1.  **Configuración y QC Visual:** Diagnóstico de profundidad de lectura (DP) y datos faltantes (Missingness) por muestra.
+2.  **Filtrado de Datos:** Limpieza automática de muestras con >50% de datos faltantes y SNPs con baja frecuencia (MAF < 0.03).
+3.  **Análisis de Estructura (PCA):** Visualización de la dispersión genética con elipses de confianza para validar la separación biológica.
+4.  **Filogenia:** Construcción de árbol *Neighbor-Joining* enraizado con un *outgroup* silvestre (*M. balbisiana*) para trazar la historia evolutiva.
+5.  **Estadísticas de Diversidad:**
+    * Comparación de Heterocigosidad Esperada ($H_e$) vs Observada ($H_o$).
+    * Cálculo de $F_{IS}$ para inferir clonalidad (valores negativos) o endogamia (valores positivos).
+6.  **Diferenciación Genética:** Cálculo de matriz de distancias $F_{ST}$ (Weir & Cockerham) global y por pares.
+7.  **Genome Scan:** Identificación de SNPs bajo selección positiva (Top 1% $G_{ST}$) comparando silvestres vs. cultivados.
 
 ## Instrucciones de Ejecución
-1. Clonar este repositorio.
-2. Asegurarse de tener los archivos `mi_archivo.vcf` y `metadatos.txt` en la carpeta `data/`.
-3. Ejecutar el script desde la raíz del proyecto:
-   ```R
-   source("scripts/Proyecto_final_gen_evol.R")
+
+1.  **Clonar el repositorio:**
+    ```bash
+    git clone [https://github.com/tu-usuario/tesis-banano.git](https://github.com/tu-usuario/tesis-banano.git)
+    ```
+
+2.  **Estructura de Carpetas:**
+    Asegúrate de que los archivos de datos estén en la carpeta correcta:
+    * `data/dataset_tesis_banano.vcf.gz`
+    * `data/popmap_tesis.txt`
+
+3.  **Ejecutar el Análisis:**
+    Abrir el archivo `.Rmd` (R Markdown) en RStudio y ejecutar los chunks secuencialmente o realizar un "Knit" para generar el reporte HTML completo.
