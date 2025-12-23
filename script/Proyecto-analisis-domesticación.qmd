@@ -1,0 +1,420 @@
+---
+title: "Avance de Tesis: Genómica de la Domesticación en Banano"
+subtitle: "Análisis de Diversidad, Estructura y Selección (Fst)"
+author: "Tu Nombre"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    theme: cosmo
+    highlight: tango
+---
+
+# 1. Configuración Global y Librerías
+
+```{r setup, warning=FALSE}
+# ==============================================================================
+# A. PANEL DE CONTROL (AJUSTAR AQUÍ PARA TODO EL ANÁLISIS)
+# ==============================================================================
+
+# 1. Archivos de Entrada
+VCF_FILE  <- "data/dataset_tesis_banano.vcf.gz"
+META_FILE <- "data/popmap_tesis.txt"
+
+# 2. Parámetros de Filtrado (QC)
+UMBRAL_MISSING_SAMPLE <- 0.50  # Eliminar muestras con > 50% de datos faltantes
+UMBRAL_MISSING_SNP    <- 0.20  # Eliminar SNPs con > 20% de datos faltantes
+UMBRAL_MAF            <- 0.03  # Frecuencia mínima de alelo menor (3%)
+
+# 3. Parámetros Filogenéticos
+OUTGROUP_ID <- "Balbisiana_16-003" # ID exacto de la muestra raíz
+
+# 4. Parámetros de Selección (Genome Scan)
+POPS_SELECCION <- c("Silvestre_2x", "Cultivado_2x") # Grupos a comparar (Gst)
+
+# 5. Estética (Colores consistentes)
+COLORES_TESIS <- c("Cultivado_2x" = "orange", 
+                   "Cultivado_3x" = "purple", 
+                   "Silvestre_2x" = "forestgreen")
+
+# ==============================================================================
+# B. CARGA DE LIBRERÍAS
+# ==============================================================================
+
+# Paquetes estándar
+packages <- c("vcfR", "adegenet", "ggplot2", "ape", "pheatmap", 
+              "hierfstat", "tidyverse", "reshape2", "poppr", "knitr")
+
+new_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
+if (length(new_packages)) install.packages(new_packages)
+
+# Paquetes especiales (Bioconductor)
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+if (!require("ggtree")) BiocManager::install("ggtree")
+
+# Cargar todo
+lapply(c(packages, "ggtree"), library, character.only = TRUE)
+
+cat("Configuración completada exitosamente.\n")
+
+```
+
+# 2. Importación de Datos 
+Cargamos el dataset filtrado que contiene ancestros silvestres, cultivados diploides y triploides.
+
+
+```{r, warning=FALSE}
+# 1. Cargar VCF
+vcf <- read.vcfR(VCF_FILE, verbose = FALSE)
+
+# 2. Cargar Metadatos
+meta <- read.table(META_FILE, header = TRUE, sep = "\t")
+
+# 3. Sincronización (Vital: Orden del VCF debe igualar a Metadata)
+muestras_vcf <- colnames(vcf@gt)[-1]
+meta <- meta[match(muestras_vcf, meta$id), ]
+
+# Resumen Inicial
+cat("--- DATOS CRUDOS ---\n")
+cat("Variantes:", nrow(vcf@gt), "\n")
+cat("Muestras: ", ncol(vcf@gt)-1, "\n")
+print(table(meta$Poblacion))
+
+# Diagnóstico de tipos de variantes
+es_indel <- is.indel(vcf)
+conteo_tipos <- table(es_indel)
+names(conteo_tipos) <- c("SNPs", "INDELs")[match(names(conteo_tipos), c("FALSE", "TRUE"))]
+print(conteo_tipos)
+```
+# 3. Diagnostico de calidad visual 
+
+```{r, warning=FALSE}
+# A. Extraer matrices
+dp <- extract.gt(vcf, element = "DP", as.numeric = TRUE)
+
+# B. Visualizar Profundidad (DP)
+dp_long <- melt(dp, varnames = c("Variant", "Sample"), value.name = "Depth")
+
+plot_dp <- ggplot(dp_long, aes(x = Sample, y = Depth)) +
+  geom_boxplot(outlier.shape = NA, fill = "lightblue", alpha=0.6) +
+  scale_y_continuous(limits = c(0, 100)) + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size=6)) +
+  labs(title = "QC: Profundidad de Lectura por Muestra", y = "Profundidad (x)")
+
+# C. Visualizar Datos Faltantes (Missingness)
+miss_sample <- apply(dp, 2, function(x) sum(is.na(x)) / length(x))
+miss_df <- data.frame(Sample = names(miss_sample), Missingness = miss_sample)
+
+plot_miss <- ggplot(miss_df, aes(x = Sample, y = Missingness)) +
+  geom_bar(stat = "identity", fill = "salmon") +
+  geom_hline(yintercept = UMBRAL_MISSING_SNP, linetype="dashed", color="red") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size=6)) +
+  labs(title = "QC: % Datos Faltantes por Muestra", y = "% Missing")
+
+# Mostrar
+print(plot_dp)
+print(plot_miss)
+```
+
+# 4. Filtrado y Limpieza de datos
+
+```{r}
+# --- FILTRADO DE MUESTRAS ---
+# Extraemos genotipos como texto para detectar "./." de forma segura
+gt_chars <- extract.gt(vcf, element = "GT", return.alleles = FALSE)
+
+# Calculamos % missing real
+total_snps <- nrow(gt_chars)
+miss_counts_sample <- apply(gt_chars, 2, function(x) sum(x == "./." | x == ".|." | is.na(x)))
+miss_perc_sample <- miss_counts_sample / total_snps
+
+# Identificar muestras malas
+muestras_malas <- names(miss_perc_sample[miss_perc_sample > UMBRAL_MISSING_SAMPLE])
+
+if(length(muestras_malas) > 0){
+  cat("ELIMINANDO muestras con >", UMBRAL_MISSING_SAMPLE*100, "% missing:", muestras_malas, "\n")
+  
+  # Filtrar columnas del VCF y filas del Metadata
+  keep_cols <- !colnames(vcf@gt)[-1] %in% muestras_malas
+  vcf_clean <- vcf
+  vcf_clean@gt <- vcf@gt[, c(TRUE, keep_cols)]
+  meta_clean <- meta[!meta$id %in% muestras_malas, ]
+} else {
+  vcf_clean <- vcf
+  meta_clean <- meta
+  cat("Todas las muestras pasaron el control de calidad.\n")
+}
+
+# --- FILTRADO DE VARIANTES (SNPs) ---
+# Recalculamos sobre el dataset limpio
+gt_clean <- extract.gt(vcf_clean, element = "GT", return.alleles = FALSE)
+
+# 1. Filtro Missing Data por SNP
+miss_counts_snp <- apply(gt_clean, 1, function(x) sum(x == "./." | x == ".|." | is.na(x)))
+vcf_clean <- vcf_clean[miss_counts_snp / ncol(gt_clean) <= UMBRAL_MISSING_SNP, ]
+
+# 2. Filtro MAF
+maf_stats <- maf(vcf_clean)
+freq <- maf_stats[, "Frequency"]
+snps_to_keep <- freq >= UMBRAL_MAF & freq <= (1 - UMBRAL_MAF)
+snps_to_keep[is.na(snps_to_keep)] <- FALSE 
+vcf_clean <- vcf_clean[snps_to_keep, ]
+
+# Resumen
+cat("\n--- REPORTE FINAL --- \n")
+cat("Muestras Finales:", ncol(vcf_clean@gt)-1, "\n")
+cat("Variantes Finales:", nrow(vcf_clean@gt), "\n")
+```
+
+# 5. Estructura Poblacional
+
+## 5.1 Análisis de Componentes Principales (PCA)
+
+Buscamos visualizar si los ancestros silvestres se separan de los cultivares.
+
+```{r}
+# 1. Conversión a Genlight (formato ligero para PCA)
+gl_pca <- vcfR2genlight(vcf_clean)
+pop(gl_pca) <- meta_clean$Poblacion
+ploidy(gl_pca) <- 2
+
+# 2. Calcular PCA
+pca <- glPca(gl_pca, nf = 3) 
+pca_scores <- data.frame(pca$scores)
+pca_scores$Poblacion <- pop(gl_pca)
+
+# Calcular varianza explicada
+eig_perc <- 100 * pca$eig / sum(pca$eig)
+
+# 3. Graficar
+ggplot(pca_scores, aes(x = PC1, y = PC2, color = Poblacion)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "lightgrey") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "lightgrey") +
+  geom_point(size = 4, alpha = 0.8) +
+  # type="norm" evita errores con clones
+  stat_ellipse(level = 0.95, linewidth = 0.5, show.legend = FALSE, type = "norm") +
+  labs(title = "Estructura Genética en Musa spp. (PCA)",
+       subtitle = paste0("N = ", nLoc(gl_pca), " SNPs"),
+       x = paste0("PC1 (", round(eig_perc[1], 1), "%)"),
+       y = paste0("PC2 (", round(eig_perc[2], 1), "%)"),
+       color = "Grupo") +
+  theme_bw() +
+  scale_color_manual(values = COLORES_TESIS)
+```
+
+# 5.2 Árbol Filogenético (Neighbor-Joining)
+
+
+```{r arbol_ggtree, fig.height=12, fig.width=10, warning=FALSE, dpi=300}
+
+# 1. Calcular Matriz de Distancias y Árbol
+dist_genetica <- dist(gl_pca)
+tree_raw <- nj(dist_genetica)
+
+# 2. Enraizar usando el parámetro global OUTGROUP_ID
+if(!OUTGROUP_ID %in% indNames(gl_pca)) {
+   stop(paste("ERROR: El Outgroup", OUTGROUP_ID, "no existe en los datos filtrados."))
+}
+tree_rooted <- root(tree_raw, outgroup = OUTGROUP_ID, resolve.root = TRUE)
+
+# 3. Graficar con ggtree
+# Preparamos metadata para el plot
+info_plot <- meta_clean
+rownames(info_plot) <- info_plot$id
+max_dist <- max(node.depth.edgelength(tree_rooted))
+
+ggtree(tree_rooted, layout = "rectangular", size=0.8) %<+% info_plot + 
+  geom_tippoint(aes(color = Poblacion), size = 3, alpha = 0.8) +
+  # Usamos label=label para evitar conflictos
+  geom_tiplab(aes(label = label), align = TRUE, linesize = 0.3, size = 2.5, offset = max_dist * 0.02) +
+  theme_tree2() + 
+  scale_color_manual(values = COLORES_TESIS) +
+  labs(title = "Filogenia de Domesticación",
+       subtitle = paste0("Raíz: ", OUTGROUP_ID),
+       color = "Grupo") +
+  theme(legend.position = "left", legend.title = element_text(face="bold")) +
+  xlim(0, max_dist * 2.5) +
+  coord_cartesian(clip = "off")
+```
+
+
+
+# 6. Diversidad Genética
+Evaluamos la Heterocigosidad Esperada (He) para ver el impacto del cuello de botella o la hibridación.
+
+```{r, fig.height=12, fig.width=10, warning=FALSE, dpi=70}
+# 1. Preparación (Conversión a Genind)
+gen_div <- vcfR2genind(vcf_clean)
+pop(gen_div) <- meta_clean$Poblacion
+
+# 2. Estadísticas Básicas
+stats <- basic.stats(gen_div, diploid = TRUE)
+
+# Data Wrangling para gráfico
+df_diversidad <- rbind(
+  melt(as.data.frame(stats$Hs), variable.name = "Poblacion", value.name = "Valor") %>% mutate(Metrica = "Esperada (He)"),
+  melt(as.data.frame(stats$Ho), variable.name = "Poblacion", value.name = "Valor") %>% mutate(Metrica = "Observada (Ho)")
+)
+
+# 3. Gráfico Comparativo
+ggplot(df_diversidad, aes(x=Poblacion, y=Valor, fill=Metrica)) +
+  geom_boxplot(outlier.shape = 1, outlier.alpha = 0.3, alpha=0.8) +
+  facet_wrap(~Poblacion, scales = "free_x") +
+  theme_bw() +
+  scale_fill_manual(values=c("Esperada (He)" = "#3498db", "Observada (Ho)" = "#e74c3c")) +
+  labs(title = "Heterocigosidad: Clonalidad vs Sexualidad", y = "Heterocigosidad") +
+  theme(axis.text.x = element_blank(), legend.position = "bottom")
+
+# 4. TABLA RESUMEN CON DIAGNÓSTICO
+resumen_stats <- df_diversidad %>%
+  group_by(Poblacion, Metrica) %>%
+  summarise(Promedio = mean(Valor, na.rm = TRUE), .groups = 'drop') %>%
+  pivot_wider(names_from = Metrica, values_from = Promedio) %>%
+  mutate(
+    Fis = (`Esperada (He)` - `Observada (Ho)`) / `Esperada (He)`,
+    Diagnostico = case_when(
+      Fis < -0.2 ~ "CLONALIDAD (Exceso Het.)",
+      Fis > 0.2  ~ "ENDOGAMIA (Deficiencia Het.)",
+      TRUE       ~ "Equilibrio"
+    )
+  ) %>%
+  mutate(across(where(is.numeric), \(x) round(x, 3))) %>%
+  arrange(desc(Fis))
+
+cat("\n--- TABLA 1: PARÁMETROS GENÉTICOS ---\n")
+print(kable(resumen_stats, align = "c"))
+
+```
+
+## 7. Diferenciación genética (Fst)
+```{r}
+# 1. Fst Global
+fst_global_obj <- wc(gen_div) # Usamos el objeto genind creado arriba
+fst_val <- fst_global_obj$FST
+
+cat("=== FST GLOBAL:", round(fst_val, 4), "===\n")
+
+# 2. Fst Pairwise
+fst_pairwise <- genet.dist(gen_div, method = "WC84")
+matriz_fst <- as.matrix(fst_pairwise)
+
+cat("\n--- Matriz de Fst por Pares ---\n")
+print(round(matriz_fst, 3))
+
+# Heatmap
+melted_fst <- melt(matriz_fst)
+ggplot(melted_fst, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), color = "white") +
+  scale_fill_gradient(low = "orange", high = "#003366", name = "Fst") +
+  theme_minimal() +
+  labs(title = "Matriz de Diferenciación Genética (Fst)", x="", y="")
+```
+
+Silvestres 2x (Referencia): Este grupo suele presentar una He más alta. Si tu Ho es similar a la He, la población está en equilibrio. Es el reservorio de diversidad original del banano.
+
+Cultivadas 2x (Domesticación): Al comparar su He con la de las silvestres, una reducción significativa indicaría un cuello de botella genético.
+
+Cultivadas 3x (Complejidad de Ploidía): Aquí es donde se pone interesante. En los triploides, es muy común que la Heterocigosidad Observada (Ho) sea mayor que la Esperada (He), resultando en un Fis negativo
+
+En banano Los silvestres tienen mucha endogamia (FIS = 0.43), mientras que los triploides cultivados muestran el clásico exceso de heterocigotos (FIS = -0.44) por la hibridación y la propagación clonal. 
+
+
+Para FIS.
+/ 0 Equilibrio
+/ >0 Endogamia, deficit de heterocigotos
+/ <0 Cruzamiento entre poblaciones
+
+# 8. Diferenciación genética Fst
+
+```{r}
+# --- Diferenciación Genética Global y por Pares (Fst) ---
+
+library(hierfstat)
+library(adegenet)
+
+# 1. PREPARACIÓN DE DATOS (Seguridad)
+# Aseguramos usar el dataset FILTRADO (vcf_clean)
+if(!exists("vcf_clean")) stop("¡Error! Ejecuta primero el filtrado (Paso 4).")
+
+# Convertimos a genind para el paquete hierfstat
+gen_fst <- vcfR2genind(vcf_clean)
+pop(gen_fst) <- meta_clean$Poblacion # Asignamos poblaciones limpias
+
+# 2. CALCULAR FST GLOBAL (Weir & Cockerham)
+# Mide cuánto se ha diferenciado la especie en total
+fst_global_obj <- wc(gen_fst)
+fst_val <- fst_global_obj$FST
+
+cat("Diferenciación Genética Global (Fst):", round(fst_val, 4), "\n")
+
+# 3. CALCULAR FST POR PARES (Pairwise Fst)
+# Mide la distancia específica entre cada par de grupos
+fst_pairwise <- genet.dist(gen_fst, method = "WC84")
+matriz_fst <- as.matrix(fst_pairwise)
+
+cat("\n--- Matriz de Fst por Pares ---\n")
+print(round(matriz_fst, 3))
+
+# 4. INTERPRETACIÓN AUTOMÁTICA
+cat("\n--- Interpretación Biológica ---\n")
+# Umbrales estándar de Wright (1978)
+if(fst_val > 0.25) {
+  cat("(!) Fst Global > 0.25: Indica una diferenciación MUY GRANDE.\n")
+  cat("    Conclusión: Los grupos están prácticamente aislados genéticamente.\n")
+} else if(fst_val > 0.15) {
+  cat("(!) Fst Global > 0.15: Indica diferenciación GRANDE.\n")
+} else {
+  cat("(-) Fst Global moderado o bajo. Todavía hay flujo genético.\n")
+}
+
+# Revisión específica Silvestre vs Cultivado
+# Buscamos nombres que contengan 'Silvestre' y 'Cultivado'
+nom_silv <- grep("Silvestre", colnames(matriz_fst), value=TRUE)[1]
+nom_cult <- grep("Cultivado", colnames(matriz_fst), value=TRUE)[1]
+
+if(!is.na(nom_silv) & !is.na(nom_cult)) {
+  dist_clave <- matriz_fst[nom_silv, nom_cult]
+  cat(paste0("\nDato clave: La distancia entre ", nom_silv, " y ", nom_cult, 
+             " es ", round(dist_clave, 3), ".\n"))
+}
+```
+
+# 9. Señales de Selección (Genome Scan)
+Aquí identificamos los SNPs que más diferencian a las poblaciones (posibles genes de domesticación). Comparamos Silvestre vs Cultivado_2x.
+
+```{r, warning=F}
+# 1. Preparación del Subset (Usando POPS_SELECCION del inicio)
+keep_samples <- meta_clean$id[meta_clean$Poblacion %in% POPS_SELECCION]
+vcf_pair <- vcf_clean[, c(TRUE, colnames(vcf_clean@gt)[-1] %in% keep_samples)]
+pop_pair <- droplevels(factor(meta_clean$Poblacion[meta_clean$id %in% keep_samples]))
+
+cat("Genome Scan entre:", levels(pop_pair), "\n")
+
+# 2. Cálculo Gst
+vcf_diff <- genetic_diff(vcf_pair, pops = pop_pair, method = 'nei')
+vcf_diff$Gst <- as.numeric(vcf_diff$Gst)
+vcf_diff$Gst[vcf_diff$Gst < 0] <- 0 
+
+# 3. Visualización (Manhattan Plot)
+umbral <- quantile(vcf_diff$Gst, 0.99, na.rm = TRUE)
+
+ggplot(vcf_diff, aes(x = POS, y = Gst)) +
+  geom_point(alpha = 0.3, color = "gray60", size = 1) +
+  geom_point(data = subset(vcf_diff, Gst > umbral), color = "#E41A1C", size = 2) +
+  geom_hline(yintercept = umbral, linetype = "dashed", color = "blue") +
+  facet_grid(~CHROM, scales = "free_x", space = "free_x") +
+  labs(title = "Señales de Selección (Genome Scan)",
+       subtitle = paste("Top 1% Gst >", round(umbral, 3)),
+       y = "Diferenciación (Gst)") +
+  theme_bw() +
+  theme(axis.text.x = element_blank(), panel.grid.minor = element_blank())
+
+# Top Candidatos
+candidatos <- vcf_diff %>% filter(Gst > umbral) %>% select(CHROM, POS, Gst) %>% arrange(desc(Gst))
+print(head(candidatos, 5))
+```
+
+Los puntos rojos representan regiones del genoma donde los ancestros silvestres y los cultivados son extremadamente diferentes. Estas son las "huellas" genéticas de la domesticación.
