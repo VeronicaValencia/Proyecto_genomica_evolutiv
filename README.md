@@ -1,4 +1,4 @@
-# Estudio Genómico de Domesticación en Banano: Análisis de Diversidad, Estructura y Ploidía
+# Estudio Genómico de Domesticación en Banano: Análisis de Diversidad y Estructura
 
 ## Descripción del Proyecto
 
